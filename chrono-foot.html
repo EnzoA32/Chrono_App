@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chrono Foot</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+  :root{
+    --bg:#ffffff;
+    --ink:#111113;
+    --ink-soft:#8A8A8E;
+    --ink-faint:#C7C7CC;
+    --green:#65EB8B;
+    --green-deep:#2FAE5A;
+    --green-ghost:#EAFBF0;
+    --red:#FF3B30;
+    --red-ghost:#FFEDEC;
+    --yellow:#FFCC00;
+    --yellow-ghost:#FFF8E0;
+    --them-dark:#1C1C1E;
+    --line:#ECECEE;
+    --shadow:0 1px 2px rgba(17,17,19,0.04), 0 10px 28px rgba(17,17,19,0.07);
+    --radius:22px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Inter,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  #app{max-width:430px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;background:var(--bg);}
+  .hidden{display:none !important;}
+
+  header{
+    position:sticky;top:0;z-index:20;background:rgba(255,255,255,0.92);backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);padding:16px 20px 14px;display:flex;align-items:center;justify-content:space-between;
+  }
+  .score-block{display:flex;align-items:center;gap:10px;}
+  .team-tag{font-size:12px;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.04em;}
+  .score-num{font-size:26px;font-weight:800;letter-spacing:-0.01em;}
+  .score-sep{color:var(--ink-faint);font-weight:700;font-size:20px;}
+  .half-pill{font-size:12px;font-weight:700;color:var(--ink);background:var(--green-ghost);border:1px solid var(--green);padding:5px 10px;border-radius:100px;white-space:nowrap;}
+  .end-link{font-size:13px;font-weight:600;color:var(--ink-soft);background:none;border:none;cursor:pointer;padding:4px;}
+
+  main{flex:1;padding:18px 18px 110px;display:flex;flex-direction:column;gap:16px;}
+
+  .card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;}
+  .card-title{font-size:13px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.05em;margin:0 0 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;}
+  .card-title i{font-size:12px;}
+  .card-title .hint{font-weight:600;text-transform:none;font-size:11.5px;color:var(--ink-faint);}
+
+  .timer-card{display:flex;flex-direction:column;align-items:center;padding:26px 20px 22px;}
+  .ring-wrap{position:relative;width:198px;height:198px;margin-bottom:18px;}
+  .ring-wrap svg{transform:rotate(-90deg);}
+  .ring-track{fill:none;stroke:var(--line);stroke-width:10;}
+  .ring-progress{fill:none;stroke:var(--green);stroke-width:10;stroke-linecap:round;transition:stroke-dashoffset 0.3s linear;}
+  .ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .ring-time{font-size:40px;font-weight:800;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;}
+  .ring-label{font-size:13px;font-weight:600;color:var(--ink-soft);margin-top:4px;}
+  .ring-label.extra{color:var(--red);}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+
+  .controls-row{display:flex;align-items:center;gap:16px;}
+  .ctrl-btn{width:52px;height:52px;border-radius:50%;border:1px solid var(--line);background:#F7F7F8;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--ink);transition:transform .15s;font-size:17px;}
+  .ctrl-btn:active{transform:scale(0.92);}
+  .ctrl-btn.primary{width:64px;height:64px;background:var(--green);border-color:var(--green);color:var(--ink);font-size:20px;}
+
+  .extra-row{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;justify-content:center;}
+  .chip-btn{font-size:12px;font-weight:700;color:var(--ink);background:#F7F7F8;border:1px solid var(--line);padding:6px 12px;border-radius:100px;cursor:pointer;}
+  .chip-btn:active{background:var(--line);}
+
+  .teams-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .team-card{padding:16px;}
+  .team-card-head{display:flex;align-items:center;gap:8px;margin-bottom:14px;}
+  .team-dot{width:8px;height:8px;border-radius:50%;}
+  .team-dot.us{background:var(--green);}
+  .team-dot.them{background:var(--ink-faint);}
+  .team-card-name{font-size:14px;font-weight:700;}
+  .action-btn{width:100%;display:flex;align-items:center;gap:10px;background:#FAFAFB;border:1px solid var(--line);border-radius:14px;padding:11px 12px;margin-bottom:8px;cursor:pointer;font-size:13.5px;font-weight:600;color:var(--ink);transition:background .15s;}
+  .action-btn:last-child{margin-bottom:0;}
+  .action-btn:active{background:var(--line);}
+  .action-ico{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12.5px;}
+  .action-ico.goal{background:var(--green-ghost);color:var(--ink);}
+  .action-ico.yellow{background:var(--yellow-ghost);color:#B88900;}
+  .action-ico.red{background:var(--red-ghost);color:var(--red);}
+
+  .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .stat-item{display:flex;flex-direction:column;gap:8px;}
+  .stat-label{font-size:12px;font-weight:600;color:var(--ink-soft);}
+  .stepper{display:flex;align-items:center;justify-content:space-between;background:#FAFAFB;border:1px solid var(--line);border-radius:12px;padding:6px 8px;}
+  .step-btn{width:28px;height:28px;border-radius:8px;background:#fff;border:1px solid var(--line);font-size:12px;color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  .step-val{font-size:16px;font-weight:800;min-width:20px;text-align:center;}
+
+  .timeline-empty{font-size:13px;color:var(--ink-soft);padding:8px 0;}
+  .tl-item{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);}
+  .tl-item:last-child{border-bottom:none;}
+  .tl-min{font-size:12px;font-weight:800;color:var(--ink-soft);width:34px;flex-shrink:0;padding-top:2px;}
+  .tl-ico{width:24px;height:24px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;}
+  .tl-text{flex:1;font-size:13.5px;line-height:1.35;}
+  .tl-text b{font-weight:700;}
+  .tl-sub{font-size:12px;color:var(--ink-soft);margin-top:1px;}
+  .tl-del{background:none;border:none;color:var(--ink-faint);cursor:pointer;font-size:13px;padding:4px;flex-shrink:0;}
+
+  .setup-title{font-size:24px;font-weight:800;margin:6px 0 4px;}
+  .setup-sub{font-size:14px;color:var(--ink-soft);margin:0 0 18px;}
+  label.field-label{font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.04em;display:block;margin-bottom:6px;}
+  input[type=text],input[type=number],input[type=email],input[type=password]{width:100%;border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:15px;font-family:inherit;color:var(--ink);background:#FAFAFB;}
+  input:focus{outline:2px solid var(--green);outline-offset:1px;}
+  .roster-chip{display:inline-flex;align-items:center;gap:6px;background:#F7F7F8;border:1px solid var(--line);border-radius:100px;padding:6px 10px 6px 12px;font-size:13px;font-weight:600;margin:0 6px 8px 0;}
+  .roster-chip button{background:none;border:none;color:var(--ink-faint);cursor:pointer;font-size:12px;padding:0;}
+  .add-row{display:flex;gap:8px;margin-top:10px;}
+  .add-row input{flex:1;}
+  .btn{border:none;border-radius:14px;padding:14px 18px;font-size:15px;font-weight:700;cursor:pointer;width:100%;display:inline-flex;align-items:center;justify-content:center;gap:8px;}
+  .btn-primary{background:var(--ink);color:#fff;}
+  .btn-green{background:var(--green);color:var(--ink);}
+  .btn-yellow{background:var(--yellow);color:var(--ink);}
+  .btn-red{background:var(--red);color:#fff;}
+  .btn-ghost{background:#F7F7F8;color:var(--ink);border:1px solid var(--line);}
+  .btn:active{opacity:.85;}
+  .btn-sm{padding:9px 12px;font-size:12.5px;width:auto;}
+  .row-gap{display:flex;gap:10px;}
+  .row-gap .btn{flex:1;}
+  .link-btn{background:none;border:none;color:var(--ink-soft);font-size:12.5px;font-weight:600;cursor:pointer;text-decoration:underline;padding:0;}
+  .top-actions{display:flex;gap:8px;margin-bottom:16px;}
+  .top-actions .btn{flex:1;}
+
+  .overlay{position:fixed;inset:0;background:rgba(17,17,19,0.4);z-index:50;opacity:0;pointer-events:none;transition:opacity .2s;}
+  .overlay.open{opacity:1;pointer-events:auto;}
+  .sheet{position:fixed;left:50%;bottom:0;transform:translate(-50%,100%);width:100%;max-width:430px;background:#fff;border-radius:24px 24px 0 0;z-index:60;padding:22px 20px 26px;transition:transform .25s cubic-bezier(.32,.72,0,1);max-height:82vh;overflow-y:auto;}
+  .overlay.open .sheet{transform:translate(-50%,0);}
+  .sheet-handle{width:36px;height:4px;background:var(--line);border-radius:100px;margin:0 auto 16px;}
+  .sheet-title{font-size:18px;font-weight:800;margin:0 0 2px;}
+  .sheet-sub{font-size:13px;color:var(--ink-soft);margin:0 0 18px;}
+  .sheet-section-label{font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.04em;margin:16px 0 8px;}
+  .player-grid{display:flex;flex-wrap:wrap;gap:8px;}
+  .player-chip{padding:9px 14px;border-radius:100px;border:1.5px solid var(--line);background:#FAFAFB;font-size:13.5px;font-weight:600;cursor:pointer;color:var(--ink);}
+  .player-chip.selected{background:var(--ink);border-color:var(--ink);color:#fff;}
+  .player-chip.none{color:var(--ink-soft);}
+  .sheet-actions{display:flex;gap:10px;margin-top:20px;}
+
+  .fab-momentum{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);width:calc(100% - 36px);max-width:394px;z-index:40;display:flex;align-items:center;justify-content:center;gap:10px;padding:15px 20px;border-radius:100px;border:none;cursor:pointer;font-size:14.5px;font-weight:800;box-shadow:0 8px 24px rgba(17,17,19,0.18);background:var(--ink);color:#fff;}
+  .fab-momentum.active-us{background:var(--green);color:var(--ink);}
+  .fab-momentum.active-them{background:var(--them-dark);color:#fff;box-shadow:0 8px 24px rgba(255,59,48,0.25);}
+  .rec-dot{width:8px;height:8px;border-radius:50%;background:var(--red);animation:pulse 1.2s infinite;flex-shrink:0;}
+
+  .momentum-bar-wrap{position:relative;height:30px;background:var(--line);border-radius:8px;overflow:hidden;margin-bottom:6px;}
+  .momentum-seg{position:absolute;top:0;bottom:0;}
+  .momentum-seg.us{background:var(--green);}
+  .momentum-seg.them{background:var(--them-dark);}
+  .momentum-ticks{display:flex;justify-content:space-between;font-size:11px;color:var(--ink-soft);font-weight:600;margin-bottom:10px;}
+  .momentum-list-item{display:flex;align-items:center;gap:8px;font-size:13px;padding:7px 0;border-bottom:1px solid var(--line);}
+  .momentum-list-item:last-child{border-bottom:none;}
+  .momentum-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+  .momentum-dot.us{background:var(--green);}
+  .momentum-dot.them{background:var(--them-dark);}
+
+  .hist-item{padding:14px 0;border-bottom:1px solid var(--line);}
+  .hist-item:last-child{border-bottom:none;}
+  .hist-score{font-weight:800;font-size:15.5px;}
+  .hist-date{font-size:12px;color:var(--ink-soft);margin-top:2px;}
+  .hist-actions{display:flex;gap:8px;margin-top:8px;}
+
+  .note{font-size:12px;color:var(--ink-soft);background:var(--green-ghost);border:1px solid var(--green);border-radius:12px;padding:10px 12px;margin-top:12px;display:flex;align-items:flex-start;gap:8px;}
+  .note.warn{background:var(--yellow-ghost);border-color:var(--yellow);}
+  .note.error{background:var(--red-ghost);border-color:var(--red);}
+  .note i{margin-top:1px;}
+  .back-row{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
+  .back-btn{background:#F7F7F8;border:1px solid var(--line);border-radius:100px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;}
+
+  .brand-badge{width:56px;height:56px;border-radius:16px;background:var(--green);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:24px;color:var(--ink);}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- LOGIN SCREEN -->
+  <main id="loginScreen" class="hidden">
+    <div style="min-height:74vh;display:flex;flex-direction:column;justify-content:center;">
+      <div style="text-align:center;">
+        <div class="brand-badge"><i class="fa-solid fa-futbol"></i></div>
+        <div class="setup-title">Chrono Foot</div>
+        <p class="setup-sub">Connecte-toi pour accéder à l'application.</p>
+      </div>
+      <div class="card">
+        <label class="field-label">Email</label>
+        <input type="email" id="loginEmail" placeholder="toi@exemple.com" style="margin-bottom:14px;">
+        <label class="field-label">Mot de passe</label>
+        <input type="password" id="loginPassword" placeholder="••••••••">
+        <div id="loginNote" class="note error hidden"></div>
+        <button class="btn btn-green" style="margin-top:16px;" onclick="handleLogin()"><i class="fa-solid fa-right-to-bracket"></i> Se connecter</button>
+        <button class="link-btn" style="display:block;margin:14px auto 0;" onclick="handleSignup()">Créer un compte</button>
+      </div>
+      <p style="text-align:center;font-size:12px;color:var(--ink-soft);margin-top:16px;padding:0 12px;">Tu peux aussi créer des comptes directement depuis Supabase → Authentication → Users, sans passer par "Créer un compte".</p>
+    </div>
+  </main>
+
+  <!-- SETUP SCREEN -->
+  <main id="setupScreen" class="hidden">
+    <div class="top-actions">
+      <button class="btn btn-ghost" onclick="showHistory()"><i class="fa-solid fa-clock-rotate-left"></i> Historique</button>
+      <button class="btn btn-ghost" id="logoutBtn" style="display:none;flex:0 0 auto;width:48px;" onclick="handleLogout()"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>
+    </div>
+
+    <div class="setup-title">Nouveau match</div>
+    <p class="setup-sub">Configure les deux équipes avant le coup d'envoi.</p>
+
+    <div id="supabaseWarning" class="note warn hidden" style="margin:0 0 16px;">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+      <span>Supabase n'est pas configuré : effectif, historique et connexion ne seront pas sauvegardés entre deux sessions.</span>
+    </div>
+
+    <div class="card">
+      <label class="field-label">Notre équipe</label>
+      <input type="text" id="usName" value="Notre équipe" style="margin-bottom:14px;">
+      <label class="field-label">Adversaire</label>
+      <input type="text" id="themName" value="Adversaire">
+    </div>
+
+    <div class="card">
+      <div class="card-title">Effectif du club</div>
+      <div id="rosterChips"></div>
+      <div class="add-row">
+        <input type="text" id="newPlayerName" placeholder="Nom du joueur">
+        <input type="number" id="newPlayerNumber" placeholder="N°" style="width:64px;">
+        <button class="btn btn-primary btn-sm" onclick="addPlayer()"><i class="fa-solid fa-user-plus"></i></button>
+      </div>
+      <div id="rosterLoadedNote" class="note hidden"><i class="fa-solid fa-circle-check"></i><span>Effectif chargé depuis Supabase.</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        Convoqués pour ce match
+        <span class="hint"><button class="link-btn" onclick="selectAllSquad(true)">Tout</button> · <button class="link-btn" onclick="selectAllSquad(false)">Aucun</button></span>
+      </div>
+      <div id="squadChips" class="player-grid"></div>
+    </div>
+
+    <button class="btn btn-green" style="margin-top:4px;" onclick="startMatch()">Démarrer le match</button>
+  </main>
+
+  <!-- HISTORY SCREEN -->
+  <main id="historyScreen" class="hidden">
+    <div class="back-row">
+      <button class="back-btn" onclick="backToSetup()"><i class="fa-solid fa-chevron-left"></i></button>
+      <div class="setup-title" style="margin:0;">Historique</div>
+    </div>
+    <p class="setup-sub">Tes matchs précédents, sauvegardés automatiquement dans Supabase.</p>
+    <div class="card">
+      <div id="historyList"><div class="timeline-empty">Chargement…</div></div>
+    </div>
+  </main>
+
+  <!-- LIVE SCREEN -->
+  <div id="liveScreen" class="hidden" style="display:flex;flex-direction:column;flex:1;">
+    <header>
+      <div class="score-block">
+        <div><div class="team-tag" id="hdrUsName">NOUS</div><div class="score-num" id="scoreUs">0</div></div>
+        <div class="score-sep">–</div>
+        <div><div class="team-tag" id="hdrThemName">ADV</div><div class="score-num" id="scoreThem">0</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="half-pill" id="halfPill">1ère mi-temps</div>
+        <button class="end-link" onclick="askEndMatch()">Terminer</button>
+      </div>
+    </header>
+
+    <main>
+      <div class="card timer-card">
+        <div class="ring-wrap">
+          <svg width="198" height="198" viewBox="0 0 198 198">
+            <circle class="ring-track" cx="99" cy="99" r="86"></circle>
+            <circle class="ring-progress" id="ringProgress" cx="99" cy="99" r="86" stroke-dasharray="540.4" stroke-dashoffset="540.4"></circle>
+          </svg>
+          <div class="ring-center">
+            <div class="ring-time" id="ringTime">00:00</div>
+            <div class="ring-label" id="ringLabel">45 min</div>
+          </div>
+        </div>
+
+        <div class="controls-row">
+          <button class="ctrl-btn" onclick="resetHalf()" title="Réinitialiser"><i class="fa-solid fa-rotate-left"></i></button>
+          <button class="ctrl-btn primary" id="playPauseBtn" onclick="toggleTimer()" title="Lancer / Pause">
+            <i class="fa-solid fa-play" id="playIcon"></i>
+            <i class="fa-solid fa-pause hidden" id="pauseIcon"></i>
+          </button>
+          <button class="ctrl-btn" onclick="nextHalf()" title="Mi-temps suivante"><i class="fa-solid fa-forward-step"></i></button>
+        </div>
+
+        <div class="extra-row">
+          <button class="chip-btn" onclick="addExtra(1,event)">+1'</button>
+          <button class="chip-btn" onclick="addExtra(2,event)">+2'</button>
+          <button class="chip-btn" onclick="addExtra(3,event)">+3'</button>
+          <button class="chip-btn" onclick="addExtra(5,event)">+5'</button>
+        </div>
+      </div>
+
+      <div class="teams-grid">
+        <div class="card team-card">
+          <div class="team-card-head"><span class="team-dot us"></span><span class="team-card-name" id="teamCardUs">Nous</span></div>
+          <button class="action-btn" onclick="openSheet('goal','us')"><span class="action-ico goal"><i class="fa-solid fa-futbol"></i></span> But</button>
+          <button class="action-btn" onclick="openSheet('yellow','us')"><span class="action-ico yellow"><i class="fa-solid fa-square"></i></span> Carton jaune</button>
+          <button class="action-btn" onclick="openSheet('red','us')"><span class="action-ico red"><i class="fa-solid fa-square"></i></span> Carton rouge</button>
+          <button class="action-btn" onclick="openSheet('sub','us')"><span class="action-ico goal"><i class="fa-solid fa-right-left"></i></span> Remplacement</button>
+        </div>
+
+        <div class="card team-card">
+          <div class="team-card-head"><span class="team-dot them"></span><span class="team-card-name" id="teamCardThem">Adversaire</span></div>
+          <button class="action-btn" onclick="openSheet('goal','them')"><span class="action-ico goal"><i class="fa-solid fa-futbol"></i></span> But</button>
+          <button class="action-btn" onclick="openSheet('yellow','them')"><span class="action-ico yellow"><i class="fa-solid fa-square"></i></span> Carton jaune</button>
+          <button class="action-btn" onclick="openSheet('red','them')"><span class="action-ico red"><i class="fa-solid fa-square"></i></span> Carton rouge</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Stats rapides</div>
+        <div class="stats-grid">
+          <div class="stat-item"><div class="stat-label">Tirs cadrés — nous</div><div class="stepper"><button class="step-btn" onclick="stepStat('shotsUs',-1)"><i class="fa-solid fa-minus"></i></button><span class="step-val" id="shotsUs">0</span><button class="step-btn" onclick="stepStat('shotsUs',1)"><i class="fa-solid fa-plus"></i></button></div></div>
+          <div class="stat-item"><div class="stat-label">Tirs cadrés — adv.</div><div class="stepper"><button class="step-btn" onclick="stepStat('shotsThem',-1)"><i class="fa-solid fa-minus"></i></button><span class="step-val" id="shotsThem">0</span><button class="step-btn" onclick="stepStat('shotsThem',1)"><i class="fa-solid fa-plus"></i></button></div></div>
+          <div class="stat-item"><div class="stat-label">Corners — nous</div><div class="stepper"><button class="step-btn" onclick="stepStat('cornersUs',-1)"><i class="fa-solid fa-minus"></i></button><span class="step-val" id="cornersUs">0</span><button class="step-btn" onclick="stepStat('cornersUs',1)"><i class="fa-solid fa-plus"></i></button></div></div>
+          <div class="stat-item"><div class="stat-label">Corners — adv.</div><div class="stepper"><button class="step-btn" onclick="stepStat('cornersThem',-1)"><i class="fa-solid fa-minus"></i></button><span class="step-val" id="cornersThem">0</span><button class="step-btn" onclick="stepStat('cornersThem',1)"><i class="fa-solid fa-plus"></i></button></div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><span><i class="fa-solid fa-fire" style="margin-right:6px;"></i>Temps forts</span><span class="hint">vert nous · noir adv.</span></div>
+        <div id="momentumBarLive"></div>
+        <div id="momentumList"></div>
+      </div>
+
+      <div class="card" style="padding-bottom:8px;">
+        <div class="card-title"><i class="fa-solid fa-list-ul" style="margin-right:6px;"></i>Feuille de match</div>
+        <div id="timelineList"><div class="timeline-empty">Aucun événement pour l'instant.</div></div>
+      </div>
+    </main>
+
+    <button class="fab-momentum" id="momentumFab" onclick="onFabClick()"><i class="fa-solid fa-fire"></i> Temps fort</button>
+  </div>
+
+  <!-- SUMMARY SCREEN -->
+  <main id="summaryScreen" class="hidden">
+    <div class="setup-title">Fin du match</div>
+    <p class="setup-sub" id="summarySub"></p>
+
+    <div class="card">
+      <div class="card-title"><i class="fa-solid fa-fire" style="margin-right:6px;"></i>Frise des temps forts</div>
+      <div id="momentumBarSummary"></div>
+      <div id="momentumSummaryList"></div>
+    </div>
+
+    <div class="card" style="padding-bottom:8px;">
+      <div class="card-title"><i class="fa-solid fa-list-ul" style="margin-right:6px;"></i>Feuille de match complète</div>
+      <div id="summaryTimeline"></div>
+    </div>
+
+    <div class="row-gap" style="margin-top:14px;">
+      <button class="btn btn-primary" onclick="exportCurrentMatch()"><i class="fa-solid fa-download"></i> Exporter</button>
+      <button class="btn btn-ghost" onclick="copyCurrentMatch()"><i class="fa-solid fa-copy"></i> Copier</button>
+    </div>
+    <div id="saveNote" class="note hidden"><i class="fa-solid fa-circle-check"></i><span>Match sauvegardé dans l'historique.</span></div>
+    <button class="btn btn-ghost" style="margin-top:14px;" onclick="location.reload()">Nouveau match</button>
+  </main>
+
+</div>
+
+<!-- BOTTOM SHEET -->
+<div class="overlay" id="overlay" onclick="if(event.target===this) closeSheet()">
+  <div class="sheet" id="sheet"></div>
+</div>
+
+<script>
+/* ================= SUPABASE CONFIG ================= */
+// 1. Crée un projet sur supabase.com
+// 2. Project Settings > API : copie l'URL et la clé "anon public"
+// 3. Colle-les ci-dessous. Exécute aussi supabase-schema.sql dans le SQL Editor.
+const SUPABASE_URL = 'https://YOUR-PROJECT.supabase.co';
+const SUPABASE_ANON_KEY = 'YOUR-ANON-PUBLIC-KEY';
+
+const SUPABASE_OK = (
+  typeof window !== 'undefined' &&
+  !!window.supabase &&
+  !SUPABASE_URL.includes('YOUR-PROJECT') &&
+  !SUPABASE_ANON_KEY.includes('YOUR-ANON')
+);
+const supabase = SUPABASE_OK ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+/* ================= STATE ================= */
+let state = {
+  usName: "Notre équipe",
+  themName: "Adversaire",
+  players: [],
+  matchSquad: [],
+  score: {us:0, them:0},
+  seconds: 0,
+  totalMatchSeconds: 0,
+  running: false,
+  half: 1,
+  halfLenSec: 45*60,
+  extra: {1:0,2:0},
+  events: [],
+  stats: {shotsUs:0, shotsThem:0, cornersUs:0, cornersThem:0},
+  momentum: {active:false, team:null, startTotalSec:0, startLabel:''},
+  momentumLog: []
+};
+let timerHandle = null;
+let pending = {};
+let playerIdSeq = 1;
+let currentMatchId = null;
+let lastMatchObj = null;
+
+/* ================= AUTH ================= */
+async function initAuthGate(){
+  if(!SUPABASE_OK){
+    document.getElementById('supabaseWarning').classList.remove('hidden');
+    document.getElementById('setupScreen').classList.remove('hidden');
+    loadRosterFromStorage();
+    return;
+  }
+  const {data} = await supabase.auth.getSession();
+  if(data && data.session){ enterApp(); }
+  else { document.getElementById('loginScreen').classList.remove('hidden'); }
+}
+function showLoginNote(msg, ok){
+  const el = document.getElementById('loginNote');
+  el.className = 'note ' + (ok ? '' : 'error');
+  el.innerHTML = `<i class="fa-solid ${ok?'fa-circle-check':'fa-triangle-exclamation'}"></i><span>${escapeHtml(msg)}</span>`;
+  el.classList.remove('hidden');
+}
+async function handleLogin(){
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  if(!email || !password){ showLoginNote('Renseigne un email et un mot de passe.'); return; }
+  const {error} = await supabase.auth.signInWithPassword({email, password});
+  if(error){ showLoginNote(error.message); return; }
+  enterApp();
+}
+async function handleSignup(){
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  if(!email || !password){ showLoginNote('Renseigne un email et un mot de passe.'); return; }
+  const {error} = await supabase.auth.signUp({email, password});
+  if(error){ showLoginNote(error.message); return; }
+  showLoginNote('Compte créé. Vérifie tes emails si une confirmation est requise, puis connecte-toi.', true);
+}
+async function handleLogout(){
+  if(SUPABASE_OK) await supabase.auth.signOut();
+  location.reload();
+}
+function enterApp(){
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('setupScreen').classList.remove('hidden');
+  if(SUPABASE_OK) document.getElementById('logoutBtn').style.display = 'flex';
+  loadRosterFromStorage();
+}
+
+/* ================= ROSTER & SQUAD ================= */
+async function loadRosterFromStorage(){
+  if(!SUPABASE_OK) return;
+  const {data, error} = await supabase.from('players').select('*').order('created_at', {ascending:true});
+  if(error){ console.error(error); return; }
+  if(data && data.length){
+    state.players = data.map(p=>({id:p.id, name:p.name, number:p.number}));
+    state.matchSquad = state.players.map(p=>p.id);
+    renderRoster();
+    document.getElementById('rosterLoadedNote').classList.remove('hidden');
+  }
+}
+async function addPlayer(){
+  const nameInput = document.getElementById('newPlayerName');
+  const numInput = document.getElementById('newPlayerNumber');
+  const name = nameInput.value.trim();
+  if(!name) return;
+  const number = numInput.value || null;
+  nameInput.value=''; numInput.value='';
+
+  if(SUPABASE_OK){
+    const {data, error} = await supabase.from('players').insert({name, number}).select().single();
+    if(error){ console.error(error); alert("Impossible d'enregistrer le joueur dans Supabase."); return; }
+    state.players.push({id:data.id, name:data.name, number:data.number});
+    state.matchSquad.push(data.id);
+  } else {
+    const id = playerIdSeq++;
+    state.players.push({id, name, number});
+    state.matchSquad.push(id);
+  }
+  renderRoster();
+  nameInput.focus();
+}
+async function removePlayer(id){
+  state.players = state.players.filter(p=>p.id!==id);
+  state.matchSquad = state.matchSquad.filter(x=>x!==id);
+  renderRoster();
+  if(SUPABASE_OK){
+    const {error} = await supabase.from('players').delete().eq('id', id);
+    if(error) console.error(error);
+  }
+}
+function renderRoster(){
+  const el = document.getElementById('rosterChips');
+  el.innerHTML = state.players.length===0 ? '<div class="timeline-empty">Aucun joueur pour le moment.</div>' : state.players.map(p=>`
+    <span class="roster-chip">${p.number? '#'+p.number+' ' : ''}${escapeHtml(p.name)}
+      <button onclick="removePlayer(${p.id})"><i class="fa-solid fa-xmark"></i></button>
+    </span>`).join('');
+  renderSquadPicker();
+}
+function renderSquadPicker(){
+  const el = document.getElementById('squadChips');
+  if(state.players.length===0){ el.innerHTML = "<div class=\"timeline-empty\">Ajoute des joueurs à l'effectif pour les convoquer.</div>"; return; }
+  el.innerHTML = state.players.map(p=>`
+    <button type="button" class="player-chip ${state.matchSquad.includes(p.id)?'selected':''}" onclick="toggleSquad(${p.id})">
+      ${p.number? '#'+p.number+' ':''}${escapeHtml(p.name)}
+    </button>`).join('');
+}
+function toggleSquad(id){
+  if(state.matchSquad.includes(id)) state.matchSquad = state.matchSquad.filter(x=>x!==id);
+  else state.matchSquad.push(id);
+  renderSquadPicker();
+}
+function selectAllSquad(v){
+  state.matchSquad = v ? state.players.map(p=>p.id) : [];
+  renderSquadPicker();
+}
+function squadPlayers(){
+  return state.players.filter(p=>state.matchSquad.includes(p.id));
+}
+
+/* ================= MATCH START ================= */
+function startMatch(){
+  state.usName = document.getElementById('usName').value.trim() || 'Notre équipe';
+  state.themName = document.getElementById('themName').value.trim() || 'Adversaire';
+  currentMatchId = Date.now();
+  document.getElementById('hdrUsName').textContent = state.usName.toUpperCase();
+  document.getElementById('hdrThemName').textContent = state.themName.toUpperCase();
+  document.getElementById('teamCardUs').textContent = state.usName;
+  document.getElementById('teamCardThem').textContent = state.themName;
+  document.getElementById('setupScreen').classList.add('hidden');
+  document.getElementById('liveScreen').classList.remove('hidden');
+  renderTimer();
+  renderMomentumCard();
+}
+
+/* ================= TIMER ================= */
+const RING_CIRC = 2*Math.PI*86;
+function renderTimer(){
+  const m = Math.floor(state.seconds/60);
+  const s = state.seconds%60;
+  document.getElementById('ringTime').textContent = pad(m)+':'+pad(s);
+  const overLimit = state.seconds > state.halfLenSec;
+  const label = document.getElementById('ringLabel');
+  if(overLimit){
+    const extraMin = Math.ceil((state.seconds-state.halfLenSec)/60);
+    label.textContent = (state.half===1?'45':'90') + "+" + extraMin;
+    label.classList.add('extra');
+  } else {
+    label.classList.remove('extra');
+    label.textContent = (state.half===1?'1ère':'2ème') + ' mi-temps';
+  }
+  const ratio = Math.min(state.seconds/state.halfLenSec, 1);
+  const offset = RING_CIRC * (1-ratio);
+  const ring = document.getElementById('ringProgress');
+  ring.style.strokeDasharray = RING_CIRC.toFixed(1);
+  ring.style.strokeDashoffset = offset.toFixed(1);
+  document.getElementById('halfPill').textContent = (state.half===1?'1ère':'2ème') + ' mi-temps';
+}
+function pad(n){ return n.toString().padStart(2,'0'); }
+function toggleTimer(){
+  state.running = !state.running;
+  document.getElementById('playIcon').classList.toggle('hidden', state.running);
+  document.getElementById('pauseIcon').classList.toggle('hidden', !state.running);
+  if(state.running){
+    timerHandle = setInterval(()=>{
+      state.seconds++;
+      state.totalMatchSeconds++;
+      renderTimer();
+      renderMomentumCard();
+    },1000);
+  } else {
+    clearInterval(timerHandle);
+  }
+}
+function resetHalf(){
+  if(!confirm('Réinitialiser le chrono de cette période ?')) return;
+  state.seconds = 0;
+  renderTimer();
+}
+function nextHalf(){
+  if(state.half===1){
+    if(!confirm('Passer à la 2ème mi-temps ? Le chrono repart de 0.')) return;
+    state.half = 2;
+    state.seconds = 0;
+    if(state.running) toggleTimer();
+    renderTimer();
+  } else {
+    askEndMatch();
+  }
+}
+function addExtra(min, evt){
+  state.extra[state.half] = (state.extra[state.half]||0) + min;
+  const chip = evt.target.closest('button');
+  const original = chip.textContent;
+  chip.textContent = "+" + state.extra[state.half] + "' ajoutées";
+  setTimeout(()=>{ chip.textContent = original; }, 1200);
+  renderMomentumCard();
+}
+
+function currentMinuteLabel(){
+  const baseMin = Math.floor(state.seconds/60) + 1;
+  const cappedBase = Math.min(baseMin, 45);
+  if(state.seconds > state.halfLenSec){
+    const extraMin = Math.ceil((state.seconds-state.halfLenSec)/60);
+    const half45 = state.half===1 ? 45 : 90;
+    return half45 + "+" + extraMin + "'";
+  }
+  const half45total = state.half===1 ? cappedBase : cappedBase+45;
+  return half45total + "'";
+}
+
+/* ================= STATS ================= */
+function stepStat(key,delta){
+  state.stats[key] = Math.max(0, state.stats[key]+delta);
+  document.getElementById(key).textContent = state.stats[key];
+}
+
+/* ================= MOMENTUM ================= */
+function plannedTotalSeconds(){
+  return state.halfLenSec*2 + (state.extra[1]||0)*60 + (state.extra[2]||0)*60;
+}
+function onFabClick(){
+  if(state.momentum.active) endMomentum();
+  else openMomentumChooser();
+}
+function openMomentumChooser(){
+  const sheet = document.getElementById('sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-title"><i class="fa-solid fa-fire" style="margin-right:8px;"></i>Temps fort</div>
+    <div class="sheet-sub">Qui domine le jeu actuellement ? La minute (${currentMinuteLabel()}) sera enregistrée automatiquement.</div>
+    <div class="row-gap" style="margin-top:4px;">
+      <button class="btn btn-green" onclick="startMomentum('us')">${escapeHtml(state.usName)}</button>
+      <button class="btn" style="background:var(--them-dark);color:#fff;" onclick="startMomentum('them')">${escapeHtml(state.themName)}</button>
+    </div>
+    <button class="btn btn-ghost" style="margin-top:10px;" onclick="closeSheet()">Annuler</button>
+  `;
+  document.getElementById('overlay').classList.add('open');
+}
+function startMomentum(team){
+  state.momentum = {active:true, team, startTotalSec: state.totalMatchSeconds, startLabel: currentMinuteLabel()};
+  closeSheet();
+  renderFab();
+  renderMomentumCard();
+}
+function endMomentum(){
+  if(!state.momentum.active) return;
+  state.momentumLog.push({
+    team: state.momentum.team,
+    startLabel: state.momentum.startLabel,
+    endLabel: currentMinuteLabel(),
+    startTotalSec: state.momentum.startTotalSec,
+    endTotalSec: state.totalMatchSeconds
+  });
+  state.momentum = {active:false, team:null, startTotalSec:0, startLabel:''};
+  renderFab();
+  renderMomentumCard();
+}
+function renderFab(){
+  const fab = document.getElementById('momentumFab');
+  if(!fab) return;
+  if(state.momentum.active){
+    fab.className = 'fab-momentum ' + (state.momentum.team==='us' ? 'active-us':'active-them');
+    fab.innerHTML = `<span class="rec-dot"></span> Fin du temps fort — ${state.momentum.team==='us'?escapeHtml(state.usName):escapeHtml(state.themName)}`;
+  } else {
+    fab.className = 'fab-momentum';
+    fab.innerHTML = `<i class="fa-solid fa-fire"></i> Temps fort`;
+  }
+}
+function renderMomentumBar(containerId, segments, totalSec, showTicks){
+  const total = Math.max(totalSec, 60);
+  let html = '<div class="momentum-bar-wrap">';
+  segments.forEach(seg=>{
+    const left = (seg.start/total*100).toFixed(2);
+    const width = Math.max(((seg.end-seg.start)/total*100), 0.6).toFixed(2);
+    html += `<div class="momentum-seg ${seg.team}" style="left:${left}%;width:${width}%;"></div>`;
+  });
+  html += '</div>';
+  if(showTicks) html += `<div class="momentum-ticks"><span>0'</span><span>45'</span><span>90'</span></div>`;
+  const container = document.getElementById(containerId);
+  if(container) container.innerHTML = html;
+}
+function renderMomentumCard(){
+  const segs = state.momentumLog.map(m=>({team:m.team, start:m.startTotalSec, end:m.endTotalSec}));
+  if(state.momentum.active) segs.push({team:state.momentum.team, start:state.momentum.startTotalSec, end:state.totalMatchSeconds});
+  renderMomentumBar('momentumBarLive', segs, Math.max(plannedTotalSeconds(), state.totalMatchSeconds), true);
+  const listEl = document.getElementById('momentumList');
+  if(!listEl) return;
+  const items = [...state.momentumLog].reverse();
+  if(items.length===0 && !state.momentum.active){ listEl.innerHTML = '<div class="timeline-empty">Aucun temps fort enregistré.</div>'; return; }
+  let html = '';
+  if(state.momentum.active){
+    html += `<div class="momentum-list-item"><span class="momentum-dot ${state.momentum.team}"></span> ${state.momentum.startLabel} → en cours : temps fort ${state.momentum.team==='us'?escapeHtml(state.usName):escapeHtml(state.themName)}</div>`;
+  }
+  html += items.map(m=>`<div class="momentum-list-item"><span class="momentum-dot ${m.team}"></span> ${m.startLabel} → ${m.endLabel} : temps fort ${m.team==='us'?escapeHtml(state.usName):escapeHtml(state.themName)}</div>`).join('');
+  listEl.innerHTML = html;
+}
+
+/* ================= EVENTS SHEET ================= */
+function openSheet(type, team){
+  pending = {type, team, scorer:null, assist:null, outPlayer:null, inPlayer:null, jersey:''};
+  renderSheet();
+  document.getElementById('overlay').classList.add('open');
+}
+function closeSheet(){ document.getElementById('overlay').classList.remove('open'); }
+function teamLabel(team){ return team==='us' ? state.usName : state.themName; }
+
+function renderSheet(){
+  const sheet = document.getElementById('sheet');
+  const teamName = teamLabel(pending.team);
+  const hasSquad = squadPlayers().length>0;
+  let title, accentBtnClass, sub;
+
+  if(pending.type==='goal'){ title='But — '+teamName; accentBtnClass='btn-green'; sub="Minute enregistrée automatiquement : "+currentMinuteLabel(); }
+  if(pending.type==='yellow'){ title='Carton jaune — '+teamName; accentBtnClass='btn-yellow'; sub="Minute : "+currentMinuteLabel(); }
+  if(pending.type==='red'){ title='Carton rouge — '+teamName; accentBtnClass='btn-red'; sub="Minute : "+currentMinuteLabel(); }
+  if(pending.type==='sub'){ title='Remplacement — '+teamName; accentBtnClass='btn-primary'; sub="Minute : "+currentMinuteLabel(); }
+
+  let html = `<div class="sheet-handle"></div><div class="sheet-title">${title}</div><div class="sheet-sub">${sub}</div>`;
+
+  if(pending.team==='them'){
+    if(pending.type!=='sub'){
+      html += `<div class="sheet-section-label">Numéro de maillot (optionnel)</div>
+        <input type="number" id="jerseyInput" placeholder="Ex. 9" oninput="pending.jersey=this.value">`;
+    }
+  } else if(pending.type==='sub'){
+    html += renderPlayerPicker('outPlayer','Joueur qui sort');
+    html += renderPlayerPicker('inPlayer','Joueur qui entre', pending.outPlayer);
+  } else if(pending.type==='goal'){
+    if(hasSquad){
+      html += renderPlayerPicker('scorer','Buteur');
+      html += renderPlayerPicker('assist','Passeur (optionnel)', pending.scorer, true);
+    } else {
+      html += `<div class="sheet-section-label">Numéro du buteur (optionnel)</div>
+        <input type="number" id="jerseyInput" placeholder="Ex. 9" oninput="pending.jersey=this.value">`;
+    }
+  } else {
+    if(hasSquad){
+      html += renderPlayerPicker('scorer','Joueur concerné');
+    } else {
+      html += `<div class="sheet-section-label">Numéro du joueur (optionnel)</div>
+        <input type="number" id="jerseyInput" placeholder="Ex. 9" oninput="pending.jersey=this.value">`;
+    }
+  }
+
+  html += `<div class="sheet-actions">
+      <button class="btn btn-ghost" onclick="closeSheet()">Annuler</button>
+      <button class="btn ${accentBtnClass}" onclick="confirmSheet()">Valider</button>
+    </div>`;
+  sheet.innerHTML = html;
+}
+function renderPlayerPicker(field, label, excludeId, allowNone){
+  let chips = squadPlayers().filter(p=>p.id!==excludeId)
+    .map(p=>`<button class="player-chip ${pending[field]===p.id?'selected':''}" onclick="selectPlayer('${field}',${p.id})">${p.number? '#'+p.number+' ':''}${escapeHtml(p.name)}</button>`).join('');
+  if(allowNone){
+    chips += `<button class="player-chip none ${pending[field]===null && pending.assistNoneChosen?'selected':''}" onclick="selectPlayer('${field}',null)">Aucun</button>`;
+  }
+  return `<div class="sheet-section-label">${label}</div><div class="player-grid">${chips}</div>`;
+}
+function selectPlayer(field, id){
+  pending[field] = id;
+  if(field==='assist') pending.assistNoneChosen = (id===null);
+  renderSheet();
+}
+function confirmSheet(){
+  const min = currentMinuteLabel();
+  const team = pending.team;
+  const teamName = teamLabel(team);
+  const findP = id => state.players.find(p=>p.id===id);
+
+  if(pending.type==='goal'){
+    if(team==='us') state.score.us++; else state.score.them++;
+    let text, sub='';
+    if(team==='us' && findP(pending.scorer)){
+      const scorer = findP(pending.scorer);
+      text = `<b>But</b> — ${escapeHtml(scorer.name)}`;
+      if(pending.assist && findP(pending.assist)) sub = 'Passe décisive : ' + escapeHtml(findP(pending.assist).name);
+    } else if(pending.jersey){
+      text = `<b>But</b> — ${escapeHtml(teamName)} (n°${escapeHtml(pending.jersey)})`;
+    } else {
+      text = `<b>But</b> — ${escapeHtml(teamName)}`;
+    }
+    addEvent('goal', team, min, text, sub);
+  }
+  if(pending.type==='yellow' || pending.type==='red'){
+    const label = pending.type==='yellow' ? 'Carton jaune' : 'Carton rouge';
+    let text;
+    if(team==='us' && findP(pending.scorer)) text = `<b>${label}</b> — ${escapeHtml(findP(pending.scorer).name)}`;
+    else if(pending.jersey) text = `<b>${label}</b> — ${escapeHtml(teamName)} (n°${escapeHtml(pending.jersey)})`;
+    else text = `<b>${label}</b> — ${escapeHtml(teamName)}`;
+    addEvent(pending.type, team, min, text, '');
+  }
+  if(pending.type==='sub'){
+    const out = findP(pending.outPlayer), inn = findP(pending.inPlayer);
+    if(out && inn) addEvent('sub', team, min, `<b>Remplacement</b> — ${escapeHtml(inn.name)} ⟵ ${escapeHtml(out.name)}`, '');
+    else { closeSheet(); return; }
+  }
+  updateScoreHeader();
+  closeSheet();
+}
+function addEvent(type, team, minute, text, sub){
+  state.events.unshift({id:Date.now()+Math.random(), type, team, minute, text, sub});
+  renderTimeline();
+}
+function deleteEvent(id){
+  const ev = state.events.find(e=>e.id===id);
+  if(ev && ev.type==='goal'){
+    if(ev.team==='us') state.score.us=Math.max(0,state.score.us-1);
+    else state.score.them=Math.max(0,state.score.them-1);
+    updateScoreHeader();
+  }
+  state.events = state.events.filter(e=>e.id!==id);
+  renderTimeline();
+}
+function updateScoreHeader(){
+  document.getElementById('scoreUs').textContent = state.score.us;
+  document.getElementById('scoreThem').textContent = state.score.them;
+}
+function iconFor(type){
+  if(type==='goal') return `<span class="tl-ico" style="background:var(--green-ghost);color:var(--ink)"><i class="fa-solid fa-futbol"></i></span>`;
+  if(type==='yellow') return `<span class="tl-ico" style="background:var(--yellow-ghost);color:#B88900"><i class="fa-solid fa-square"></i></span>`;
+  if(type==='red') return `<span class="tl-ico" style="background:var(--red-ghost);color:var(--red)"><i class="fa-solid fa-square"></i></span>`;
+  return `<span class="tl-ico" style="background:#F0F0F2;color:var(--ink)"><i class="fa-solid fa-right-left"></i></span>`;
+}
+function renderTimeline(){
+  const el = document.getElementById('timelineList');
+  if(state.events.length===0){ el.innerHTML = "<div class=\"timeline-empty\">Aucun événement pour l'instant.</div>"; return; }
+  el.innerHTML = state.events.map(ev=>`
+    <div class="tl-item">
+      <div class="tl-min">${ev.minute}</div>
+      ${iconFor(ev.type)}
+      <div class="tl-text">${ev.text}${ev.sub?`<div class="tl-sub">${ev.sub}</div>`:''}</div>
+      <button class="tl-del" onclick="deleteEvent(${ev.id})"><i class="fa-solid fa-xmark"></i></button>
+    </div>`).join('');
+}
+
+/* ================= END MATCH / SUMMARY ================= */
+async function askEndMatch(){
+  if(!confirm('Terminer le match maintenant ?')) return;
+  if(state.running) toggleTimer();
+  if(state.momentum.active) endMomentum();
+
+  document.getElementById('liveScreen').classList.add('hidden');
+  document.getElementById('summaryScreen').classList.remove('hidden');
+  document.getElementById('summarySub').textContent = `${state.usName} ${state.score.us} – ${state.score.them} ${state.themName}`;
+
+  const el = document.getElementById('summaryTimeline');
+  const sorted = [...state.events].reverse();
+  el.innerHTML = sorted.length ? sorted.map(ev=>`
+    <div class="tl-item">
+      <div class="tl-min">${ev.minute}</div>
+      ${iconFor(ev.type)}
+      <div class="tl-text">${ev.text}${ev.sub?`<div class="tl-sub">${ev.sub}</div>`:''}</div>
+    </div>`).join('') : '<div class="timeline-empty">Aucun événement enregistré.</div>';
+
+  const segs = state.momentumLog.map(m=>({team:m.team, start:m.startTotalSec, end:m.endTotalSec}));
+  renderMomentumBar('momentumBarSummary', segs, Math.max(plannedTotalSeconds(), state.totalMatchSeconds), true);
+  const sumList = document.getElementById('momentumSummaryList');
+  sumList.innerHTML = state.momentumLog.length ? state.momentumLog.map(m=>
+    `<div class="momentum-list-item"><span class="momentum-dot ${m.team}"></span> ${m.startLabel} → ${m.endLabel} : temps fort ${m.team==='us'?escapeHtml(state.usName):escapeHtml(state.themName)}</div>`
+  ).join('') : '<div class="timeline-empty">Aucun temps fort enregistré.</div>';
+
+  lastMatchObj = buildMatchSummary();
+  const saved = await safeSet_matchHistory(lastMatchObj);
+  document.getElementById('saveNote').classList.toggle('hidden', !saved);
+}
+
+function stripHtml(html){ const d=document.createElement('div'); d.innerHTML=html; return d.textContent; }
+function buildMatchSummary(){
+  return {
+    id: currentMatchId,
+    date: Date.now(),
+    usName: state.usName,
+    themName: state.themName,
+    score: {...state.score},
+    events: state.events.map(e=>({type:e.type, team:e.team, minute:e.minute, text:stripHtml(e.text), sub: e.sub ? stripHtml(e.sub) : ''})).reverse(),
+    momentum: state.momentumLog.map(m=>({team:m.team, startLabel:m.startLabel, endLabel:m.endLabel})),
+    stats: {...state.stats},
+    totalMatchSeconds: state.totalMatchSeconds
+  };
+}
+async function safeSet_matchHistory(matchObj){
+  if(!SUPABASE_OK) return false;
+  const {error} = await supabase.from('matches').insert({
+    id: matchObj.id,
+    date: new Date(matchObj.date).toISOString(),
+    us_name: matchObj.usName,
+    them_name: matchObj.themName,
+    score_us: matchObj.score.us,
+    score_them: matchObj.score.them,
+    events: matchObj.events,
+    momentum: matchObj.momentum,
+    stats: matchObj.stats,
+    total_seconds: matchObj.totalMatchSeconds
+  });
+  if(error){ console.error(error); return false; }
+  return true;
+}
+function downloadJSON(obj, filename){
+  const blob = new Blob([JSON.stringify(obj,null,2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 300);
+}
+function exportCurrentMatch(){ if(lastMatchObj) downloadJSON(lastMatchObj, 'match-'+lastMatchObj.id+'.json'); }
+async function copyCurrentMatch(){
+  if(!lastMatchObj) return;
+  const text = JSON.stringify(lastMatchObj, null, 2);
+  try{ await navigator.clipboard.writeText(text); alert('Résumé du match copié dans le presse-papiers.'); }
+  catch(e){ alert("Impossible de copier automatiquement. Utilise plutôt le bouton Exporter."); }
+}
+
+/* ================= HISTORY SCREEN ================= */
+function showHistory(){
+  document.getElementById('setupScreen').classList.add('hidden');
+  document.getElementById('historyScreen').classList.remove('hidden');
+  loadHistoryList();
+}
+function backToSetup(){
+  document.getElementById('historyScreen').classList.add('hidden');
+  document.getElementById('setupScreen').classList.remove('hidden');
+}
+async function loadHistoryList(){
+  const container = document.getElementById('historyList');
+  if(!SUPABASE_OK){
+    container.innerHTML = "<div class=\"timeline-empty\">Configure Supabase pour activer l'historique des matchs.</div>";
+    return;
+  }
+  const {data, error} = await supabase.from('matches').select('*').order('date', {ascending:false});
+  if(error){ console.error(error); container.innerHTML = '<div class="timeline-empty">Erreur de chargement depuis Supabase.</div>'; return; }
+  if(!data || data.length===0){ container.innerHTML = '<div class="timeline-empty">Aucun match sauvegardé pour le moment.</div>'; return; }
+  container.innerHTML = data.map(m=>`
+    <div class="hist-item">
+      <div class="hist-score">${escapeHtml(m.us_name)} ${m.score_us} – ${m.score_them} ${escapeHtml(m.them_name)}</div>
+      <div class="hist-date">${new Date(m.date).toLocaleString('fr-FR')}</div>
+      <div class="hist-actions">
+        <button class="btn btn-ghost btn-sm" onclick="exportMatchById(${m.id})"><i class="fa-solid fa-download"></i> Exporter</button>
+        <button class="btn btn-ghost btn-sm" onclick="deleteMatchById(${m.id})"><i class="fa-solid fa-trash"></i> Supprimer</button>
+      </div>
+    </div>`).join('');
+}
+async function exportMatchById(id){
+  const {data, error} = await supabase.from('matches').select('*').eq('id', id).single();
+  if(!error && data) downloadJSON(data, 'match-'+id+'.json');
+}
+async function deleteMatchById(id){
+  if(!confirm('Supprimer ce match de l\'historique ?')) return;
+  const {error} = await supabase.from('matches').delete().eq('id', id);
+  if(error) console.error(error);
+  loadHistoryList();
+}
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+/* ================= INIT ================= */
+document.getElementById('newPlayerName').addEventListener('keydown', e=>{ if(e.key==='Enter') addPlayer(); });
+initAuthGate();
+</script>
+</body>
+</html>
