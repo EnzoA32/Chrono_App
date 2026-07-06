@@ -385,7 +385,7 @@ const SUPABASE_OK = (
   !SUPABASE_URL.includes('YOUR-PROJECT') &&
   !SUPABASE_ANON_KEY.includes('YOUR-ANON')
 );
-const supabase = SUPABASE_OK ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+const sb = SUPABASE_OK ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 /* ================= STATE ================= */
 let state = {
@@ -419,7 +419,7 @@ async function initAuthGate(){
     loadRosterFromStorage();
     return;
   }
-  const {data} = await supabase.auth.getSession();
+  const {data} = await sb.auth.getSession();
   if(data && data.session){ enterApp(); }
   else { document.getElementById('loginScreen').classList.remove('hidden'); }
 }
@@ -433,7 +433,7 @@ async function handleLogin(){
   const email = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
   if(!email || !password){ showLoginNote('Renseigne un email et un mot de passe.'); return; }
-  const {error} = await supabase.auth.signInWithPassword({email, password});
+  const {error} = await sb.auth.signInWithPassword({email, password});
   if(error){ showLoginNote(error.message); return; }
   enterApp();
 }
@@ -441,12 +441,12 @@ async function handleSignup(){
   const email = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
   if(!email || !password){ showLoginNote('Renseigne un email et un mot de passe.'); return; }
-  const {error} = await supabase.auth.signUp({email, password});
+  const {error} = await sb.auth.signUp({email, password});
   if(error){ showLoginNote(error.message); return; }
   showLoginNote('Compte créé. Vérifie tes emails si une confirmation est requise, puis connecte-toi.', true);
 }
 async function handleLogout(){
-  if(SUPABASE_OK) await supabase.auth.signOut();
+  if(SUPABASE_OK) await sb.auth.signOut();
   location.reload();
 }
 function enterApp(){
@@ -459,7 +459,7 @@ function enterApp(){
 /* ================= ROSTER & SQUAD ================= */
 async function loadRosterFromStorage(){
   if(!SUPABASE_OK) return;
-  const {data, error} = await supabase.from('players').select('*').order('created_at', {ascending:true});
+  const {data, error} = await sb.from('players').select('*').order('created_at', {ascending:true});
   if(error){ console.error(error); return; }
   if(data && data.length){
     state.players = data.map(p=>({id:p.id, name:p.name, number:p.number}));
@@ -477,7 +477,7 @@ async function addPlayer(){
   nameInput.value=''; numInput.value='';
 
   if(SUPABASE_OK){
-    const {data, error} = await supabase.from('players').insert({name, number}).select().single();
+    const {data, error} = await sb.from('players').insert({name, number}).select().single();
     if(error){ console.error(error); alert("Impossible d'enregistrer le joueur dans Supabase."); return; }
     state.players.push({id:data.id, name:data.name, number:data.number});
     state.matchSquad.push(data.id);
@@ -494,7 +494,7 @@ async function removePlayer(id){
   state.matchSquad = state.matchSquad.filter(x=>x!==id);
   renderRoster();
   if(SUPABASE_OK){
-    const {error} = await supabase.from('players').delete().eq('id', id);
+    const {error} = await sb.from('players').delete().eq('id', id);
     if(error) console.error(error);
   }
 }
@@ -890,7 +890,7 @@ function buildMatchSummary(){
 }
 async function safeSet_matchHistory(matchObj){
   if(!SUPABASE_OK) return false;
-  const {error} = await supabase.from('matches').insert({
+  const {error} = await sb.from('matches').insert({
     id: matchObj.id,
     date: new Date(matchObj.date).toISOString(),
     us_name: matchObj.usName,
@@ -937,7 +937,7 @@ async function loadHistoryList(){
     container.innerHTML = "<div class=\"timeline-empty\">Configure Supabase pour activer l'historique des matchs.</div>";
     return;
   }
-  const {data, error} = await supabase.from('matches').select('*').order('date', {ascending:false});
+  const {data, error} = await sb.from('matches').select('*').order('date', {ascending:false});
   if(error){ console.error(error); container.innerHTML = '<div class="timeline-empty">Erreur de chargement depuis Supabase.</div>'; return; }
   if(!data || data.length===0){ container.innerHTML = '<div class="timeline-empty">Aucun match sauvegardé pour le moment.</div>'; return; }
   container.innerHTML = data.map(m=>`
@@ -951,12 +951,12 @@ async function loadHistoryList(){
     </div>`).join('');
 }
 async function exportMatchById(id){
-  const {data, error} = await supabase.from('matches').select('*').eq('id', id).single();
+  const {data, error} = await sb.from('matches').select('*').eq('id', id).single();
   if(!error && data) downloadJSON(data, 'match-'+id+'.json');
 }
 async function deleteMatchById(id){
   if(!confirm('Supprimer ce match de l\'historique ?')) return;
-  const {error} = await supabase.from('matches').delete().eq('id', id);
+  const {error} = await sb.from('matches').delete().eq('id', id);
   if(error) console.error(error);
   loadHistoryList();
 }
