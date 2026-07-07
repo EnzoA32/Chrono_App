@@ -53,6 +53,7 @@ module.exports = async (req, res) => {
           .update({
             is_paid: true,
             stripe_customer_id: session.customer || null,
+            stripe_subscription_id: session.subscription || null,
             stripe_session_id: session.id
           })
           .eq('id', userId);
@@ -62,6 +63,33 @@ module.exports = async (req, res) => {
         console.error('No client_reference_id on checkout session', session.id);
       }
     }
+
+    // Abonnement mis à jour (renouvellement, passage en impayé, etc.)
+    if(event.type === 'customer.subscription.updated'){
+      const subscription = event.data.object;
+      const activeStatuses = ['active', 'trialing'];
+      const isActive = activeStatuses.includes(subscription.status);
+
+      const {error} = await supabaseAdmin
+        .from('profiles')
+        .update({ is_paid: isActive, stripe_subscription_id: subscription.id })
+        .eq('stripe_customer_id', subscription.customer);
+
+      if(error) console.error('Failed to update profile on subscription update:', error);
+    }
+
+    // Abonnement résilié / supprimé définitivement
+    if(event.type === 'customer.subscription.deleted'){
+      const subscription = event.data.object;
+
+      const {error} = await supabaseAdmin
+        .from('profiles')
+        .update({ is_paid: false })
+        .eq('stripe_customer_id', subscription.customer);
+
+      if(error) console.error('Failed to deactivate profile on subscription deletion:', error);
+    }
+
     res.status(200).json({received: true});
   } catch(err){
     console.error('Webhook handling error:', err);

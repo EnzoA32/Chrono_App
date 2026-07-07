@@ -45,7 +45,7 @@ module.exports = async (req, res) => {
     const appUrl = process.env.APP_URL || `https://${req.headers.host}`;
 
     const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
+      mode: 'subscription',
       payment_method_types: ['card'],
       customer_email: user.email,
       client_reference_id: user.id,
@@ -66,4 +66,3 @@ module.exports = async (req, res) => {
     res.status(500).json({error: err.message || 'Erreur serveur.'});
   }
 };
-
