@@ -198,6 +198,28 @@
     </div>
   </main>
 
+  <!-- PAYWALL SCREEN -->
+  <main id="paywallScreen" class="hidden">
+    <div style="min-height:74vh;display:flex;flex-direction:column;justify-content:center;">
+      <div style="text-align:center;">
+        <div class="brand-badge"><i class="fa-solid fa-lock"></i></div>
+        <div class="setup-title">Activation requise</div>
+        <p class="setup-sub">Ton compte a bien été créé. Il ne reste qu'une étape avant d'accéder à l'application.</p>
+      </div>
+      <div class="card">
+        <div id="paywallIdle">
+          <p style="font-size:14px;color:var(--ink-soft);margin:0 0 16px;">Clique ci-dessous pour régler l'accès à Chrono Foot. Tu seras redirigé vers une page de paiement sécurisée (Stripe), puis ramené automatiquement ici une fois le paiement confirmé.</p>
+          <button class="btn btn-green" onclick="startCheckout()"><i class="fa-solid fa-credit-card"></i> Payer et activer mon compte</button>
+        </div>
+        <div id="paywallChecking" class="hidden" style="text-align:center;">
+          <p style="font-size:14px;color:var(--ink-soft);"><i class="fa-solid fa-spinner fa-spin"></i> Vérification du paiement en cours…</p>
+        </div>
+        <div id="paywallNote" class="note hidden" style="margin-top:14px;"></div>
+      </div>
+      <button class="link-btn" style="display:block;margin:16px auto 0;" onclick="handleLogout()">Se déconnecter</button>
+    </div>
+  </main>
+
   <!-- SETUP SCREEN -->
   <main id="setupScreen" class="hidden">
     <div class="top-actions">
@@ -420,7 +442,16 @@ async function initAuthGate(){
     return;
   }
   const {data} = await sb.auth.getSession();
-  if(data && data.session){ enterApp(); }
+  if(data && data.session){
+    const params = new URLSearchParams(window.location.search);
+    if(params.get('paid')==='success'){
+      window.history.replaceState({}, '', window.location.pathname);
+      document.getElementById('paywallScreen').classList.remove('hidden');
+      pollPaymentAfterReturn();
+    } else {
+      enterApp();
+    }
+  }
   else { document.getElementById('loginScreen').classList.remove('hidden'); }
 }
 function showLoginNote(msg, ok){
@@ -449,11 +480,69 @@ async function handleLogout(){
   if(SUPABASE_OK) await sb.auth.signOut();
   location.reload();
 }
-function enterApp(){
+async function enterApp(){
   document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('paywallScreen').classList.add('hidden');
+
+  if(!SUPABASE_OK){
+    document.getElementById('setupScreen').classList.remove('hidden');
+    loadRosterFromStorage();
+    return;
+  }
+
+  const paid = await checkIsPaid();
+  if(!paid){
+    document.getElementById('paywallScreen').classList.remove('hidden');
+    return;
+  }
+  document.getElementById('logoutBtn').style.display = 'flex';
   document.getElementById('setupScreen').classList.remove('hidden');
-  if(SUPABASE_OK) document.getElementById('logoutBtn').style.display = 'flex';
   loadRosterFromStorage();
+}
+async function checkIsPaid(){
+  const {data:{user}} = await sb.auth.getUser();
+  if(!user) return false;
+  const {data, error} = await sb.from('profiles').select('is_paid').eq('id', user.id).single();
+  if(error){ console.error(error); return false; }
+  return !!(data && data.is_paid);
+}
+async function startCheckout(){
+  const {data:{session}} = await sb.auth.getSession();
+  if(!session){ return; }
+  document.getElementById('paywallIdle').classList.add('hidden');
+  document.getElementById('paywallChecking').classList.remove('hidden');
+  try{
+    const res = await fetch('/api/create-checkout-session', {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':'Bearer '+session.access_token}
+    });
+    const data = await res.json();
+    if(data.url){ window.location.href = data.url; }
+    else { throw new Error(data.error || 'Réponse invalide du serveur.'); }
+  } catch(e){
+    console.error(e);
+    document.getElementById('paywallChecking').classList.add('hidden');
+    document.getElementById('paywallIdle').classList.remove('hidden');
+    const note = document.getElementById('paywallNote');
+    note.className = 'note error';
+    note.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i><span>Impossible de démarrer le paiement pour le moment. Réessaie dans un instant.</span>`;
+    note.classList.remove('hidden');
+  }
+}
+async function pollPaymentAfterReturn(){
+  document.getElementById('paywallIdle').classList.add('hidden');
+  document.getElementById('paywallChecking').classList.remove('hidden');
+  for(let i=0;i<8;i++){
+    const paid = await checkIsPaid();
+    if(paid){ enterApp(); return; }
+    await new Promise(r=>setTimeout(r, 1500));
+  }
+  document.getElementById('paywallChecking').classList.add('hidden');
+  document.getElementById('paywallIdle').classList.remove('hidden');
+  const note = document.getElementById('paywallNote');
+  note.className = 'note warn';
+  note.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i><span>Paiement en cours de confirmation. Si ça persiste après une minute, recharge la page.</span>`;
+  note.classList.remove('hidden');
 }
 
 /* ================= ROSTER & SQUAD ================= */
