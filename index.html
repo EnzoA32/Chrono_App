@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Chrono Foot</title>
+<title>Onze MyLive</title>
 <link rel="icon" type="image/x-icon" href="favicon.ico">
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
@@ -179,6 +179,7 @@
   .back-btn{background:#F7F7F8;border:1px solid var(--line);border-radius:100px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;}
 
   .brand-badge{width:56px;height:56px;border-radius:16px;background:var(--green);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:24px;color:var(--ink);}
+  .brand-badge-img{width:64px;height:64px;border-radius:16px;margin:0 auto 14px;display:block;object-fit:cover;}
 </style>
 </head>
 <body>
@@ -188,8 +189,8 @@
   <main id="loginScreen" class="hidden">
     <div style="min-height:74vh;display:flex;flex-direction:column;justify-content:center;">
       <div style="text-align:center;">
-        <div class="brand-badge"><i class="fa-solid fa-futbol"></i></div>
-        <div class="setup-title">Chrono Foot</div>
+        <img src="logo.png" alt="Onze MyLive" class="brand-badge-img">
+        <div class="setup-title">Onze MyLive</div>
         <p class="setup-sub">Connecte-toi pour accéder à l'application.</p>
       </div>
       <div class="card">
@@ -215,7 +216,7 @@
       </div>
       <div class="card">
         <div id="paywallIdle">
-          <p style="font-size:14px;color:var(--ink-soft);margin:0 0 16px;">Clique ci-dessous pour régler l'accès à Chrono Foot. Tu seras redirigé vers une page de paiement sécurisée (Stripe), puis ramené automatiquement ici une fois le paiement confirmé.</p>
+          <p style="font-size:14px;color:var(--ink-soft);margin:0 0 16px;">Clique ci-dessous pour régler l'accès à Onze MyLive. Tu seras redirigé vers une page de paiement sécurisée (Stripe), puis ramené automatiquement ici une fois le paiement confirmé.</p>
           <button class="btn btn-green" onclick="startCheckout()"><i class="fa-solid fa-credit-card"></i> Payer et activer mon compte</button>
         </div>
         <div id="paywallChecking" class="hidden" style="text-align:center;">
