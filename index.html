@@ -251,9 +251,25 @@
     </div>
 
     <div class="card">
+      <div class="card-title"><i class="fa-solid fa-link" style="margin-right:6px;"></i>My Onze</div>
+      <div id="myOnzeUnlinked">
+        <p style="font-size:13px;color:var(--ink-soft);margin:0 0 12px;">Lie ce compte à ton équipe My Onze pour récupérer automatiquement l'effectif et exporter les résultats de match.</p>
+        <div class="add-row" style="margin-top:0;">
+          <input type="text" id="myOnzeCodeInput" placeholder="Code d'accès (ex. 63A8BF0)">
+          <button class="btn btn-primary btn-sm" onclick="linkMyOnze()">Lier</button>
+        </div>
+      </div>
+      <div id="myOnzeLinked" class="hidden">
+        <div class="note"><i class="fa-solid fa-circle-check"></i><span>Lié à <b id="myOnzeTeamNameLabel"></b> — l'effectif et les résultats sont synchronisés automatiquement.</span></div>
+        <button class="link-btn" style="margin-top:10px;" onclick="unlinkMyOnze()">Délier ce compte</button>
+      </div>
+      <div id="myOnzeNote" class="note hidden" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="card">
       <div class="card-title">Effectif du club</div>
       <div id="rosterChips"></div>
-      <div class="add-row">
+      <div id="localRosterAddRow" class="add-row">
         <input type="text" id="newPlayerName" placeholder="Nom du joueur">
         <input type="number" id="newPlayerNumber" placeholder="N°" style="width:64px;">
         <button class="btn btn-primary btn-sm" onclick="addPlayer()"><i class="fa-solid fa-user-plus"></i></button>
@@ -391,6 +407,7 @@
       <button class="btn btn-ghost" onclick="copyCurrentMatch()"><i class="fa-solid fa-copy"></i> Copier</button>
     </div>
     <div id="saveNote" class="note hidden"><i class="fa-solid fa-circle-check"></i><span>Match sauvegardé dans l'historique.</span></div>
+    <div id="myOnzeExportNote" class="note hidden"></div>
     <button class="btn btn-ghost" style="margin-top:14px;" onclick="location.reload()">Nouveau match</button>
   </main>
 
@@ -433,7 +450,9 @@ let state = {
   events: [],
   stats: {shotsUs:0, shotsThem:0, cornersUs:0, cornersThem:0},
   momentum: {active:false, team:null, startTotalSec:0, startLabel:''},
-  momentumLog: []
+  momentumLog: [],
+  myOnzeLinked: false,
+  myOnzeTeamName: null
 };
 let timerHandle = null;
 let pending = {};
@@ -556,15 +575,107 @@ async function pollPaymentAfterReturn(){
 /* ================= ROSTER & SQUAD ================= */
 async function loadRosterFromStorage(){
   if(!SUPABASE_OK) return;
+
+  const linked = await loadMyOnzeStatus();
+  if(linked){
+    await loadMyOnzeRoster();
+    return;
+  }
+
+  document.getElementById('myOnzeLinked').classList.add('hidden');
+  document.getElementById('myOnzeUnlinked').classList.remove('hidden');
+  document.getElementById('localRosterAddRow').classList.remove('hidden');
+
   const {data, error} = await sb.from('players').select('*').order('created_at', {ascending:true});
   if(error){ console.error(error); return; }
   if(data && data.length){
-    state.players = data.map(p=>({id:p.id, name:p.name, number:p.number}));
+    state.players = data.map(p=>({id:String(p.id), name:p.name, number:p.number}));
     state.matchSquad = state.players.map(p=>p.id);
     renderRoster();
     document.getElementById('rosterLoadedNote').classList.remove('hidden');
   }
 }
+
+async function loadMyOnzeStatus(){
+  try{
+    const {data:{session}} = await sb.auth.getSession();
+    if(!session) return false;
+    const {data: profile, error} = await sb.from('profiles').select('myonze_team_id, myonze_team_name').eq('id', session.user.id).single();
+    if(error || !profile || !profile.myonze_team_id) return false;
+    state.myOnzeLinked = true;
+    state.myOnzeTeamName = profile.myonze_team_name;
+    document.getElementById('myOnzeUnlinked').classList.add('hidden');
+    document.getElementById('myOnzeLinked').classList.remove('hidden');
+    document.getElementById('myOnzeTeamNameLabel').textContent = profile.myonze_team_name || 'ton équipe';
+    return true;
+  } catch(e){ console.error(e); return false; }
+}
+
+async function loadMyOnzeRoster(){
+  const {data:{session}} = await sb.auth.getSession();
+  if(!session) return;
+  try{
+    const res = await fetch('/api/myonze-roster', {
+      headers: {'Authorization':'Bearer '+session.access_token}
+    });
+    const data = await res.json();
+    if(data.linked && Array.isArray(data.players)){
+      state.players = data.players.map(p=>({id:String(p.id), name:p.name, number:p.number}));
+      state.matchSquad = state.players.map(p=>p.id);
+      document.getElementById('localRosterAddRow').classList.add('hidden');
+      document.getElementById('rosterLoadedNote').classList.add('hidden');
+      renderRoster();
+    }
+  } catch(e){ console.error(e); }
+}
+
+async function linkMyOnze(){
+  const input = document.getElementById('myOnzeCodeInput');
+  const code = input.value.trim();
+  const note = document.getElementById('myOnzeNote');
+  note.classList.add('hidden');
+  if(!code) return;
+  try{
+    const {data:{session}} = await sb.auth.getSession();
+    const res = await fetch('/api/link-myonze-team', {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':'Bearer '+session.access_token},
+      body: JSON.stringify({code})
+    });
+    const data = await res.json();
+    if(!res.ok || data.error){
+      note.className = 'note error';
+      note.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i><span>${escapeHtml(data.error || 'Code invalide.')}</span>`;
+      note.classList.remove('hidden');
+      return;
+    }
+    input.value = '';
+    await loadRosterFromStorage();
+  } catch(e){
+    console.error(e);
+    note.className = 'note error';
+    note.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i><span>Erreur de connexion, réessaie.</span>`;
+    note.classList.remove('hidden');
+  }
+}
+
+async function unlinkMyOnze(){
+  if(!confirm("Délier ce compte de My Onze ? L'effectif redeviendra celui géré localement.")) return;
+  const {data:{session}} = await sb.auth.getSession();
+  try{
+    await fetch('/api/unlink-myonze-team', {
+      method:'POST',
+      headers:{'Authorization':'Bearer '+session.access_token}
+    });
+  } catch(e){ console.error(e); }
+  state.myOnzeLinked = false;
+  state.myOnzeTeamName = null;
+  state.players = [];
+  state.matchSquad = [];
+  document.getElementById('rosterLoadedNote').classList.add('hidden');
+  await loadRosterFromStorage();
+}
+
 async function addPlayer(){
   const nameInput = document.getElementById('newPlayerName');
   const numInput = document.getElementById('newPlayerNumber');
@@ -576,10 +687,10 @@ async function addPlayer(){
   if(SUPABASE_OK){
     const {data, error} = await sb.from('players').insert({name, number}).select().single();
     if(error){ console.error(error); alert("Impossible d'enregistrer le joueur dans Supabase."); return; }
-    state.players.push({id:data.id, name:data.name, number:data.number});
-    state.matchSquad.push(data.id);
+    state.players.push({id:String(data.id), name:data.name, number:data.number});
+    state.matchSquad.push(String(data.id));
   } else {
-    const id = playerIdSeq++;
+    const id = String(playerIdSeq++);
     state.players.push({id, name, number});
     state.matchSquad.push(id);
   }
@@ -597,9 +708,10 @@ async function removePlayer(id){
 }
 function renderRoster(){
   const el = document.getElementById('rosterChips');
+  const removable = !state.myOnzeLinked;
   el.innerHTML = state.players.length===0 ? '<div class="timeline-empty">Aucun joueur pour le moment.</div>' : state.players.map(p=>`
     <span class="roster-chip">${p.number? '#'+p.number+' ' : ''}${escapeHtml(p.name)}
-      <button onclick="removePlayer(${p.id})"><i class="fa-solid fa-xmark"></i></button>
+      ${removable ? `<button onclick="removePlayer('${p.id}')"><i class="fa-solid fa-xmark"></i></button>` : ''}
     </span>`).join('');
   renderSquadPicker();
 }
@@ -607,7 +719,7 @@ function renderSquadPicker(){
   const el = document.getElementById('squadChips');
   if(state.players.length===0){ el.innerHTML = "<div class=\"timeline-empty\">Ajoute des joueurs à l'effectif pour les convoquer.</div>"; return; }
   el.innerHTML = state.players.map(p=>`
-    <button type="button" class="player-chip ${state.matchSquad.includes(p.id)?'selected':''}" onclick="toggleSquad(${p.id})">
+    <button type="button" class="player-chip ${state.matchSquad.includes(p.id)?'selected':''}" onclick="toggleSquad('${p.id}')">
       ${p.number? '#'+p.number+' ':''}${escapeHtml(p.name)}
     </button>`).join('');
 }
@@ -857,7 +969,7 @@ function renderSheet(){
 }
 function renderPlayerPicker(field, label, excludeId, allowNone){
   let chips = squadPlayers().filter(p=>p.id!==excludeId)
-    .map(p=>`<button class="player-chip ${pending[field]===p.id?'selected':''}" onclick="selectPlayer('${field}',${p.id})">${p.number? '#'+p.number+' ':''}${escapeHtml(p.name)}</button>`).join('');
+    .map(p=>`<button class="player-chip ${pending[field]===p.id?'selected':''}" onclick="selectPlayer('${field}','${p.id}')">${p.number? '#'+p.number+' ':''}${escapeHtml(p.name)}</button>`).join('');
   if(allowNone){
     chips += `<button class="player-chip none ${pending[field]===null && pending.assistNoneChosen?'selected':''}" onclick="selectPlayer('${field}',null)">Aucun</button>`;
   }
@@ -877,16 +989,18 @@ function confirmSheet(){
   if(pending.type==='goal'){
     if(team==='us') state.score.us++; else state.score.them++;
     let text, sub='';
+    let scorerId=null, assistId=null;
     if(team==='us' && findP(pending.scorer)){
       const scorer = findP(pending.scorer);
+      scorerId = scorer.id;
       text = `<b>But</b> — ${escapeHtml(scorer.name)}`;
-      if(pending.assist && findP(pending.assist)) sub = 'Passe décisive : ' + escapeHtml(findP(pending.assist).name);
+      if(pending.assist && findP(pending.assist)){ assistId = findP(pending.assist).id; sub = 'Passe décisive : ' + escapeHtml(findP(pending.assist).name); }
     } else if(pending.jersey){
       text = `<b>But</b> — ${escapeHtml(teamName)} (n°${escapeHtml(pending.jersey)})`;
     } else {
       text = `<b>But</b> — ${escapeHtml(teamName)}`;
     }
-    addEvent('goal', team, min, text, sub);
+    addEvent('goal', team, min, text, sub, {scorerId, assistId});
   }
   if(pending.type==='yellow' || pending.type==='red'){
     const label = pending.type==='yellow' ? 'Carton jaune' : 'Carton rouge';
@@ -904,8 +1018,8 @@ function confirmSheet(){
   updateScoreHeader();
   closeSheet();
 }
-function addEvent(type, team, minute, text, sub){
-  state.events.unshift({id:Date.now()+Math.random(), type, team, minute, text, sub});
+function addEvent(type, team, minute, text, sub, meta){
+  state.events.unshift({id:Date.now()+Math.random(), type, team, minute, minuteNum: parseInt(minute,10), text, sub, meta: meta||{}});
   renderTimeline();
 }
 function deleteEvent(id){
@@ -969,6 +1083,56 @@ async function askEndMatch(){
   lastMatchObj = buildMatchSummary();
   const saved = await safeSet_matchHistory(lastMatchObj);
   document.getElementById('saveNote').classList.toggle('hidden', !saved);
+
+  await exportToMyOnze();
+}
+
+async function exportToMyOnze(){
+  const note = document.getElementById('myOnzeExportNote');
+  if(!note) return;
+  if(!SUPABASE_OK || !state.myOnzeLinked){ note.classList.add('hidden'); return; }
+
+  try{
+    const {data:{session}} = await sb.auth.getSession();
+    const goals = state.events
+      .filter(ev => ev.type==='goal' && ev.team==='us')
+      .map(ev => ({
+        playerId: ev.meta && ev.meta.scorerId ? ev.meta.scorerId : null,
+        assistPlayerId: ev.meta && ev.meta.assistId ? ev.meta.assistId : null,
+        minute: isNaN(ev.minuteNum) ? null : ev.minuteNum
+      }));
+
+    const res = await fetch('/api/myonze-export-match', {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':'Bearer '+session.access_token},
+      body: JSON.stringify({
+        opponent: state.themName,
+        scoreUs: state.score.us,
+        scoreThem: state.score.them,
+        goals
+      })
+    });
+    const data = await res.json();
+
+    if(!res.ok || !data.exported){
+      note.className = 'note warn';
+      note.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i><span>Export vers My Onze impossible pour l'instant. Le match reste disponible dans l'historique Onze MyLive.</span>`;
+      note.classList.remove('hidden');
+      return;
+    }
+
+    const msg = data.linkedExisting
+      ? `Résultat associé au match déjà programmé dans My Onze (${data.exportedGoals} but(s) exporté(s)).`
+      : `Nouveau match créé dans My Onze (${data.exportedGoals} but(s) exporté(s)).`;
+    note.className = 'note';
+    note.innerHTML = `<i class="fa-solid fa-circle-check"></i><span>${msg}</span>`;
+    note.classList.remove('hidden');
+  } catch(e){
+    console.error(e);
+    note.className = 'note warn';
+    note.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i><span>Export vers My Onze impossible pour l'instant.</span>`;
+    note.classList.remove('hidden');
+  }
 }
 
 function stripHtml(html){ const d=document.createElement('div'); d.innerHTML=html; return d.textContent; }
