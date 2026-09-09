@@ -310,7 +310,7 @@
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
         <div class="half-pill" id="halfPill">1ère mi-temps</div>
-        <button class="end-link" onclick="askEndMatch()">Terminer</button>
+        <button class="end-link" id="endLinkBtn" onclick="nextHalf()">Terminer la 1ère mi-temps</button>
       </div>
     </header>
 
@@ -749,6 +749,7 @@ function startMatch(){
   document.getElementById('liveScreen').classList.remove('hidden');
   renderTimer();
   renderMomentumCard();
+  updateEndLinkLabel();
 }
 
 /* ================= TIMER ================= */
@@ -775,21 +776,38 @@ function renderTimer(){
   document.getElementById('halfPill').textContent = (state.half===1?'1ère':'2ème') + ' mi-temps';
 }
 function pad(n){ return n.toString().padStart(2,'0'); }
+let lastTickAt = null;
+function timerTick(){
+  if(!state.running || lastTickAt===null) return;
+  const now = Date.now();
+  const elapsed = Math.round((now - lastTickAt)/1000);
+  if(elapsed > 0){
+    state.seconds += elapsed;
+    state.totalMatchSeconds += elapsed;
+    lastTickAt = now;
+    renderTimer();
+    renderMomentumCard();
+  }
+}
 function toggleTimer(){
   state.running = !state.running;
   document.getElementById('playIcon').classList.toggle('hidden', state.running);
   document.getElementById('pauseIcon').classList.toggle('hidden', !state.running);
   if(state.running){
-    timerHandle = setInterval(()=>{
-      state.seconds++;
-      state.totalMatchSeconds++;
-      renderTimer();
-      renderMomentumCard();
-    },1000);
+    lastTickAt = Date.now();
+    timerHandle = setInterval(timerTick, 1000);
   } else {
     clearInterval(timerHandle);
+    lastTickAt = null;
   }
 }
+// Le navigateur suspend souvent les setInterval quand l'écran se verrouille
+// ou que l'onglet passe en arrière-plan. Comme timerTick() calcule le temps
+// écoulé à partir de l'horloge réelle (Date.now()) et non d'un simple
+// compteur de "tics", le chrono se rattrape automatiquement dès que l'app
+// redevient active, au lieu d'avoir pris du retard.
+document.addEventListener('visibilitychange', () => { if(!document.hidden) timerTick(); });
+window.addEventListener('focus', timerTick);
 function resetHalf(){
   if(!confirm('Réinitialiser le chrono de cette période ?')) return;
   state.seconds = 0;
@@ -802,9 +820,15 @@ function nextHalf(){
     state.seconds = 0;
     if(state.running) toggleTimer();
     renderTimer();
+    updateEndLinkLabel();
   } else {
     askEndMatch();
   }
+}
+function updateEndLinkLabel(){
+  const btn = document.getElementById('endLinkBtn');
+  if(!btn) return;
+  btn.textContent = state.half===1 ? 'Terminer la 1ère mi-temps' : 'Terminer le match';
 }
 function addExtra(min, evt){
   state.extra[state.half] = (state.extra[state.half]||0) + min;
